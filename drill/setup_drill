@@ -115,13 +115,6 @@ end
 [
 
 {
-  "name": "run-drill-zookeeper",
-  "type": "file",
-  "file": "#{runDir}/run-zookeeper",
-  "pattern": "1"
-},
-
-{
   "name": "run-drill",
   "type": "file",
   "file": "#{runDir}/run-drill",
@@ -135,71 +128,18 @@ end
   "stop": "/etc/init.d/drillbit stop",
   "pid-file": "#{runDir}/drillbit.pid",
   "pattern": "org.apache.drill.exec.server.Drillbit",
-  "depends": ["run-drill", "drill-zookeeper"]
-},
-
-{
-  "name": "drill-zookeeper",
-  "type": "process",
-  "start": "/home/hadoop/drill/zookeeper/bin/zkServer.sh start",
-  "stop": "/home/hadoop/drill/zookeeper/bin/zkServer.sh stop",
-  "pid-file": "#{runDir}/zookeeper/zookeeper_server.pid",
-  "pattern": "org.apache.zookeeper.server.quorum.QuorumPeerMain",
-  "depends": ["run-drill-zookeeper"]
+  "depends": ["run-drill"]
 }
-
 ]
 EOF
 )
 end
 
     sudo "mv /tmp/drill.conf /etc/service-nanny/drill.conf"
-    sudo "echo '1' >/mnt/var/run/drill/run-zookeeper"
     sudo "echo '1' >/mnt/var/run/drill/run-drill"
 
 end
 
-def installZookeeper(targetDir, runDir, logDir)
-    zkTarGZUrl="http://beta.elasticmapreduce.s3.amazonaws.com/bootstrap-actions/zookeeper-standalone"
-    zkTarGZ="zookeeper-3.4.5.tar.gz"
-
-    println "Going to download Zookeeper distribution #{zkTarGZ} from #{zkTarGZUrl}"
-    sudo "curl -L --silent --show-error --fail --connect-timeout 60 --max-time 720 --retry 5 -O  #{zkTarGZUrl}/#{zkTarGZ}"
-
-    println "Installing zookeeper in #{targetDir}"
-    sudo "tar xzf #{zkTarGZ} && rm -f #{zkTarGZ}"
-    sudo "mv *zookeeper* #{targetDir}/"
-    sudo "ln -s `ls -d #{targetDir}/*zookeeper*` /home/hadoop/drill/zookeeper"
-
-    File.open('/tmp/zoo.cfg', 'w') do |f|
-    f.write(<<EOF
-maxClientCnxns=50
-
-# The number of milliseconds of each tick
-tickTime=2000
-
-# The number of ticks that the initial 
-# synchronization phase can take
-initLimit=10
-
-# The number of ticks that can pass between 
-# sending a request and getting an acknowledgement
-syncLimit=5
-
-# the directory where the snapshot is stored.
-dataDir=#{runDir}
-
-# the directory where the snapshot is stored.
-dataLogDir=#{logDir}
-
-# the port at which the clients will connect
-clientPort=2181
-EOF
-)
-end
-    sudo "mv /tmp/zoo.cfg /home/hadoop/drill/zookeeper/conf/ && chmod 644 /home/hadoop/drill/zookeeper/conf/zoo.cfg"
-
-end
 
 def installDrill(targetDir, runDir, logDir)
     drillTarGZUrl="http://getdrill.org/drill/download"
@@ -212,11 +152,6 @@ def installDrill(targetDir, runDir, logDir)
     println "Installing Apache Drill..."
     sudo "tar xzf #{drillTarGZ} && rm -f #{drillTarGZ}"
     sudo "mv #{drillRoot} #{targetDir}/ && ln -s #{targetDir}/#{drillRoot} /home/hadoop/drill"
-
-    sudo "mkdir -p #{runDir}/zookeeper"
-    sudo "mkdir -p #{logDir}/zookeeper"
-    println "Installing Zookeeper..."
-    installZookeeper("/home/hadoop/drill", "#{runDir}/zookeeper", "#{logDir}/zookeeper")
 
     println "Configuring Apache Drill..."
     sudo "chown -R hadoop.hadoop /home/hadoop/.versions/*drill*"
