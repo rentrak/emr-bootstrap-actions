@@ -19,6 +19,7 @@ require 'json'
 require 'net/http'
 
 def run(cmd)
+    puts cmd
     if ! system(cmd) then
       raise "Command failed: #{cmd}"
     end
@@ -41,13 +42,12 @@ $zookeeper = job_flow['masterPrivateDnsName']
 
 def cleanUp(targetDir,runDir,logDir)
     println "Cleaning up stale directories.. "
-    println "\t#{targetDir}/*drill*"
-    sudo "rm -rf #{targetDir}/*drill*"
-    println "\t/home/hadoop/drill"
-    sudo "rm -rf /home/hadoop/drill"
+    println "\t#{targetDir}"
+    sudo "rm -rf #{targetDir}"
     println "\t#{runDir} #{logDir}"
     sudo "rm -rf #{runDir} #{logDir}"
 end
+
 
 def writeDrillConfs(runDir,logDir)
     zookeeperConnect=$zookeeper
@@ -90,11 +90,11 @@ EOF
 )
 end
 
-    sudo "mv /tmp/drill-override.conf /home/hadoop/drill/conf/drill-override.conf && chmod 644 /home/hadoop/drill/conf/drill-override.conf"
+    sudo "mv /tmp/drill-override.conf /usr/lib/drill/conf/drill-override.conf && chmod 644 /usr/lib/drill/conf/drill-override.conf"
 
     File.open('/tmp/drillbit', 'w') do |f| 
     f.write(<<EOF
-/home/hadoop/drill/bin/drillbit.sh $@
+/usr/lib/drill/bin/drillbit.sh $@
 EOF
 )
 end
@@ -102,13 +102,14 @@ end
 
     File.open('/tmp/drill-init-config.sh', 'w') do |f|
     f.write(<<EOF
+export DRILL_HOME=/usr/lib/drill
 export DRILL_LOG_DIR=/mnt/var/log/drill
 export DRILL_PID_DIR=/mnt/var/run/drill
 export DRILL_MAX_DIRECT_MEMORY=4096M
 EOF
 )
 end
-    sudo "cat /tmp/drill-init-config.sh >> /home/hadoop/drill/bin/drill-config.sh && rm /tmp/drill-init-config.sh"
+    sudo "mv /tmp/drill-init-config.sh /usr/lib/drill/conf/drill-env.sh"
 
     File.open('/tmp/drill.conf', 'w') do |f| 
     f.write(<<EOF
@@ -150,12 +151,14 @@ def installDrill(targetDir, runDir, logDir)
     sudo "curl -L --silent --show-error --fail --connect-timeout 60 --max-time 720 --retry 5 -O #{drillTarGZUrl}/#{drillTarGZ}"
 
     println "Installing Apache Drill..."
-    sudo "tar xzf #{drillTarGZ} && rm -f #{drillTarGZ}"
-    sudo "mv #{drillRoot} #{targetDir}/ && ln -s #{targetDir}/#{drillRoot} /home/hadoop/drill"
+    sudo "tar -xzf #{drillTarGZ}"
+    sudo "rm -f #{drillTarGZ}"
+    sudo "mv #{drillRoot} #{targetDir}"
+    sudo "chown -R root.root #{targetDir}"
 
     println "Configuring Apache Drill..."
-    sudo "chown -R hadoop.hadoop /home/hadoop/.versions/*drill*"
-    sudo "mkdir -p #{runDir} && mkdir -p #{logDir}"
+    sudo "mkdir -p #{runDir}"
+    sudo "mkdir -p #{logDir}"
     sudo "chown -R hadoop.hadoop #{runDir}"
     sudo "chown -R hadoop.hadoop #{logDir}"
 
@@ -168,7 +171,7 @@ def installDrill(targetDir, runDir, logDir)
     sudo "/etc/init.d/service-nanny restart"
 end
 
-$targetDir="/home/hadoop/.versions"
+$targetDir="/usr/lib/drill"
 $runDir="/mnt/var/run/drill"
 $logDir="/mnt/var/log/drill"
 
