@@ -34,10 +34,15 @@ def println(*args)
     puts
 end
 
+security_endpoint = 'http://169.254.169.254/latest/meta-data/iam/security-credentials/'
+req = Net::HTTP.get_response(URI(security_endpoint))
+$has_roles = (req.code.to_i == 200) ? true : false
+
 userdata_endpoint = 'http://169.254.169.254/latest/user-data'
 instance_info = JSON.parse( Net::HTTP.get( URI.parse( userdata_endpoint ) ) )
-job_flow = JSON.parse(File.read('/mnt/var/lib/info/job-flow.json'))
 is_master = instance_info['isMaster'].to_s == 'true'
+
+job_flow = JSON.parse(File.read('/mnt/var/lib/info/job-flow.json'))
 $zookeeper = job_flow['masterPrivateDnsName']
 
 def cleanUp(targetDir,runDir,logDir)
@@ -80,8 +85,7 @@ drill.exec: {
           count: 7200,
           delay: 500
         }
-  }
-
+  },
   network: {
     start: 35000
   }
@@ -111,6 +115,25 @@ EOF
 end
     sudo "mv /tmp/drill-init-config.sh /usr/lib/drill/conf/drill-env.sh"
 
+    if $has_roles then
+    
+        File.open('/tmp/core-site.xml', 'w') do |f|
+            f.write(<<EOF
+<?xml version="1.0" encoding="UTF-8" ?>
+<configuration>
+  <property>
+    <name>fs.s3a.aws.credentials.provider</name>
+    <value>com.amazonaws.auth.DefaultAWSCredentialsProviderChain</value>
+  </property>
+</configuration>
+EOF
+)
+end
+
+        sudo "mv /tmp/core-site.xml /usr/lib/drill/conf/site-core.xml"
+
+    end
+    
     File.open('/tmp/drill.conf', 'w') do |f| 
     f.write(<<EOF
 [
